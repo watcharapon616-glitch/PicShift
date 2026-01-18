@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import heic2any from 'heic2any';
-
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [isConverting, setIsConverting] = useState(false);
@@ -15,11 +14,10 @@ export default function App() {
   const [targetFormat, setTargetFormat] = useState('jpg'); 
   const [selectedSize, setSelectedSize] = useState('original');
   const [isDark, setIsDark] = useState(true);
-  
+
   const [customW, setCustomW] = useState('5.0');
   const [customH, setCustomH] = useState('5.0');
   const [unit, setUnit] = useState('cm');
-
   useEffect(() => {
     if (isDark) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');

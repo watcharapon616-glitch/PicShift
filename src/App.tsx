@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { 
   FileUp, X, CheckCircle2, Download, Zap, 
   ImageIcon, Loader2, Sun, Moon,
-  FileText, ChevronRight, ShieldCheck, Globe, Cpu
+  FileText, ChevronRight, ShieldCheck, Globe, Cpu,
+  HelpCircle, BookOpen, Lock
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import heic2any from 'heic2any';
@@ -53,7 +54,6 @@ export default function App() {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // --- 1. WORD TO PDF (แก้ไขภาษาไทย) ---
       if (isWordFile) {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
@@ -61,7 +61,6 @@ export default function App() {
 
         const doc = new jsPDF('p', 'pt', 'a4');
 
-        // ฝังฟอนต์ไทยลงใน PDF (เช็คค่าจาก Import)
         if (THAI_FONT_BASE64 && THAI_FONT_BASE64.length > 100) {
           doc.addFileToVFS("Sarabun.ttf", THAI_FONT_BASE64);
           doc.addFont("Sarabun.ttf", "Sarabun", "normal");
@@ -69,18 +68,15 @@ export default function App() {
         }
 
         const container = document.createElement('div');
-        // แก้ไข Style ตรงนี้เพื่อให้รองรับภาษาไทยขณะ Render
         container.style.width = '500px'; 
         container.style.padding = '40px';
         container.style.backgroundColor = '#ffffff';
         container.style.color = '#000000';
-        // บังคับใช้ฟอนต์ Sarabun
         container.style.fontFamily = 'Sarabun'; 
         container.style.fontSize = '14pt';
         container.style.lineHeight = '1.6';
         container.innerHTML = htmlContent;
 
-        // บังคับให้สระไม่ลอยโดยการนำไปวางใน DOM ชั่วคราว
         document.body.appendChild(container);
 
         await doc.html(container, {
@@ -93,10 +89,9 @@ export default function App() {
           y: 40,
           width: 515,
           windowWidth: 515,
-          autoPaging: 'text' // ช่วยเรื่องการตัดหน้าที่มีภาษาไทย
+          autoPaging: 'text'
         });
       }
-      // --- 2. PDF LOGIC (คงเดิม) ---
       else if (file.type === 'application/pdf') {
         const pdfjsURL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
         const pdfjsLib = await import(/* @vite-ignore */ pdfjsURL);
@@ -136,7 +131,6 @@ export default function App() {
           }, `image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9);
         }
       } 
-      // --- 3. IMAGE CONVERSION (คงเดิม) ---
       else {
         let currentFile: any = file;
         if (file.name.toLowerCase().endsWith('.heic')) {
@@ -186,6 +180,7 @@ export default function App() {
   return (
     <div className={`min-h-screen w-full flex flex-col transition-colors duration-500 font-sans ${isDark ? 'bg-[#030712] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       
+      {/* Navigation */}
       <nav className={`fixed top-0 w-full z-50 border-b ${isDark ? 'bg-slate-950/80 border-white/5' : 'bg-white/80 border-slate-200'} backdrop-blur-md`}>
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -206,13 +201,14 @@ export default function App() {
       </nav>
 
       <main className="flex-1 flex flex-col items-center pt-32 pb-20 px-6">
-        <div className="w-full max-w-xl mb-20">
+        {/* Converter Section */}
+        <div className="w-full max-w-xl mb-0">
           <div className={`rounded-[3rem] border overflow-hidden shadow-2xl transition-all duration-500 ${isDark ? 'bg-slate-900/40 border-white/10 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200'}`}>
             
             {!file ? (
               <label className="group cursor-pointer block">
                 <input type="file" hidden onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <div className="py-32 flex flex-col items-center text-center px-10">
+                <div className="py-32  flex flex-col items-center text-center px-10">
                   <div className="w-24 h-24 rounded-[2.5rem] bg-blue-600/10 text-blue-500 border border-blue-500/20 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-xl shadow-blue-500/5">
                     <FileUp size={44} />
                   </div>
@@ -221,7 +217,7 @@ export default function App() {
                     Convert JPG, PNG, HEIC, PDF, and DOCX documents instantly in your browser.
                   </p>
                   <div className="mt-8 flex gap-2">
-                    {['SECURE','LOCAL','FAST'].map(t => (
+                    {['SECURE','LOCAL','THAI FONT READY'].map(t => (
                       <span key={t} className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[9px] font-black tracking-widest">{t}</span>
                     ))}
                   </div>
@@ -303,7 +299,7 @@ export default function App() {
                 ) : (
                   <div className="text-center py-10 space-y-10 animate-in zoom-in-95 duration-700">
                     <div className="w-32 h-32 bg-emerald-500/10 text-emerald-500 rounded-[3.5rem] flex items-center justify-center mx-auto border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.15)]">
-                       <CheckCircle2 size={64} />
+                        <CheckCircle2 size={64} />
                     </div>
                     <div>
                       <h3 className="text-4xl font-black mb-2 italic tracking-tighter uppercase leading-none">Success!</h3>
@@ -327,7 +323,8 @@ export default function App() {
           </p>
         </div>
 
-        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-8 mt-10 border-t border-white/5 pt-20">
+        {/* Feature Cards */}
+        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-8 mt-0 border-t border-white/5 pt-20">
           <div className="space-y-4">
             <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
               <ShieldCheck size={24} />
@@ -350,10 +347,106 @@ export default function App() {
             <p className="text-sm opacity-50 leading-relaxed">Need specific dimensions for printing or web? Use our custom scaling tool with CM and Inch support.</p>
           </div>
         </div>
+
+        {/* --- GLOBAL SECTION: ARTICLES & FAQ --- */}
+        <div className="w-full max-w-4xl mt-32 space-y-24">
+          
+          {/* Global Technology Section */}
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div className="space-y-6">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black tracking-widest uppercase">
+                <BookOpen size={14} /> Technology
+              </div>
+              <h3 className="text-3xl font-black tracking-tight leading-tight">
+                High-Fidelity Document <br/> 
+                <span className="text-blue-500">Multi-Language Rendering</span>
+              </h3>
+              <p className="opacity-60 leading-relaxed text-sm">
+                PicShift uses advanced client-side rendering to ensure your documents look identical to the original. Our engine supports complex character sets, including **Full Thai Font integration (TH Sarabun New)**, preventing the common "broken layout" or "floating vowel" issues found in other converters.
+              </p>
+              <div className="flex gap-4">
+                <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase">
+                  <CheckCircle2 size={16}/> Thai Font Ready
+                </div>
+                <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase">
+                  <CheckCircle2 size={16}/> Unicode Support
+                </div>
+              </div>
+            </div>
+            <div className={`p-8 rounded-[2.5rem] border ${isDark ? 'bg-slate-900 border-white/5' : 'bg-white border-slate-200'} shadow-xl`}>
+               <div className="space-y-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] font-black opacity-40 uppercase">Global Font Support</span>
+                    <span className="text-[10px] font-black text-blue-500 uppercase">Active</span>
+                  </div>
+                  <div className="h-2 w-full bg-blue-500/20 rounded-full"></div>
+                  <div className="h-2 w-5/6 bg-slate-500/10 rounded-full"></div>
+                  <div className="h-2 w-full bg-slate-500/10 rounded-full"></div>
+                  <div className="pt-4 flex justify-between items-center border-t border-white/5">
+                    <span className="text-[10px] font-black opacity-40 uppercase">Optimized for</span>
+                    <span className="text-[10px] font-black text-emerald-500 uppercase">TH / EN / MULTI-LANG ✅</span>
+                  </div>
+               </div>
+            </div>
+          </section>
+
+          {/* Global FAQ Section */}
+          <section className="space-y-12">
+            <div className="text-center space-y-4">
+              <h3 className="text-3xl font-black tracking-tight">Frequently Asked Questions</h3>
+              <p className="opacity-40 text-sm font-bold uppercase tracking-widest">Global Support & Privacy Standards</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {[
+                {
+                  q: "Is my data safe with PicShift?",
+                  a: "Absolutely. We utilize 100% Client-Side processing. Your files never touch our servers, meaning your private data stays on your machine throughout the entire conversion process."
+                },
+                {
+                  q: "Does it support Thai fonts (สระไม่ลอย)?",
+                  a: "Yes! We specialize in complex scripts. Our PDF engine is pre-loaded with standard Thai fonts like TH Sarabun New to ensure perfect rendering without broken characters."
+                },
+                {
+                  q: "Is PicShift free to use?",
+                  a: "PicShift is 100% free with no registration required. We believe in providing high-quality tools for the modern web without artificial limitations or daily caps."
+                },
+                {
+                  q: "Can I convert HEIC from iPhone?",
+                  a: "Definitely. Just drag your Apple HEIC files into the converter and select JPG or PNG. Our tool handles the conversion instantly in your browser."
+                }
+              ].map((faq, i) => (
+                <div key={i} className={`p-8 rounded-3xl border ${isDark ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'} space-y-4`}>
+                  <div className="flex items-center gap-3 text-blue-500">
+                    <HelpCircle size={20} />
+                    <h5 className="font-black text-sm uppercase tracking-tight">{faq.q}</h5>
+                  </div>
+                  <p className="text-sm opacity-60 leading-relaxed">{faq.a}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Privacy Note (Global Standard) */}
+          <section className={`p-12 rounded-[3rem] border ${isDark ? 'bg-gradient-to-br from-blue-900/20 to-transparent border-blue-500/10' : 'bg-blue-50 border-blue-100'} text-center space-y-6`}>
+            <div className="w-16 h-16 bg-blue-500/20 text-blue-500 rounded-2xl flex items-center justify-center mx-auto">
+              <Lock size={32} />
+            </div>
+            <h3 className="text-2xl font-black tracking-tight">Privacy Policy & Security</h3>
+            <p className="max-w-2xl mx-auto opacity-70 leading-relaxed text-sm">
+              We value your privacy. PicShift does not collect personal data, usage patterns, or store your files. Everything is processed via your browser's memory and cleared instantly once you close the session.
+            </p>
+          </section>
+
+        </div>
       </main>
 
-      <footer className="py-10 border-t border-white/5 text-center">
-        <p className="text-[10px] font-bold opacity-20 uppercase tracking-[0.2em]">© 2024 PicShift Global • Built for the Modern Web</p>
+      <footer className="py-20 border-t border-white/5 text-center space-y-6">
+        <div className="flex justify-center gap-8 text-[10px] font-black uppercase tracking-[0.2em] opacity-40">
+           <a href="#" className="hover:text-blue-500 transition-colors">Privacy Policy</a>
+           <a href="#" className="hover:text-blue-500 transition-colors">Terms of Service</a>
+           <a href="#" className="hover:text-blue-500 transition-colors">About Us</a>
+        </div>
+        <p className="text-[10px] font-bold opacity-20 uppercase tracking-[0.2em]">© 2026 PicShift Global • Built for the Modern Web</p>
       </footer>
     </div>
   );

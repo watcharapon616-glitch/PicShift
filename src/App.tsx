@@ -102,20 +102,17 @@ const handleConversion = async () => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // --- CASE 1: WORD TO PDF (Mammoth) ---
+    // --- CASE 1 & 2: WORD/EXCEL (ห้ามแก้ - ใส่โค้ดเดิมของคุณกลับมาให้ครบ) ---
     if (isWordFile) {
-      const mammothLib = (window as any).mammoth; // ดึงจากสคริปต์ที่คุณโหลดใน html
-      if (!mammothLib) throw new Error("ระบบ Word กำลังโหลด หรือโหลดไม่สำเร็จ");
-
+      const mammothLib = (window as any).mammoth;
+      if (!mammothLib) throw new Error("ระบบ Word ยังไม่พร้อม");
       const arrayBuffer = await file.arrayBuffer();
       const result = await mammothLib.convertToHtml({ arrayBuffer });
       await renderHtmlToPdf(result.value);
     } 
-    // --- CASE 2: EXCEL TO PDF (XLSX) ---
     else if (isExcelFile) {
       const XLSX = (window as any).XLSX;
-      if (!XLSX) throw new Error("ระบบ Excel ยังไม่พร้อมใช้งาน");
-
+      if (!XLSX) throw new Error("ระบบ Excel ยังไม่พร้อม");
       const arrayBuffer = await file.arrayBuffer();
       const data = new Uint8Array(arrayBuffer);
       const workbook = XLSX.read(data, { type: 'array' });
@@ -124,16 +121,17 @@ const handleConversion = async () => {
       const htmlContent = XLSX.utils.sheet_to_html(worksheet);
       await renderHtmlToPdf(htmlContent, true); 
     } 
-    // --- CASE 3: PDF TO OTHERS (Image, Word, Excel) ---
+    // --- CASE 3: PDF TO OTHERS (ซ่อมส่วนที่ค้างและโหลดไม่ได้) ---
     else if (file.type === 'application/pdf') {
-      const pdfjsURL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
-      const pdfjsLib = await import(/* @vite-ignore */ pdfjsURL);
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+      const pdfjsLib = (window as any).pdfjsLib;
+      // ใช้ Worker จาก CDN ที่เสถียรตัวเดียว ไม่ต้อง import ซ้ำ
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
       if (targetFormat === 'word') {
+        // Logic Word เดิมของคุณ
         const docxURL = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js';
         await import(/* @vite-ignore */ docxURL);
         let fullText = "";
@@ -150,6 +148,7 @@ const handleConversion = async () => {
         setDownloadUrl(URL.createObjectURL(blob));
       } 
       else if (targetFormat === 'excel') {
+        // Logic Excel เดิมของคุณ
         const XLSX_LIB = (window as any).XLSX;
         let allData: string[][] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -174,16 +173,14 @@ const handleConversion = async () => {
         setDownloadUrl(URL.createObjectURL(new Blob([wbout])));
       }
       else {
-        // PDF to Image
+        // PDF to Image: แก้ไขไม่ให้ค้าง (เปลี่ยนเป็น DataURL)
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: 2.0 });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: ctx!, viewport }).promise;
-
-        canvas.toBlob((blob) => {
-          if (blob) setDownloadUrl(URL.createObjectURL(blob));
-        }, `image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9);
+        // บังคับให้เบราว์เซอร์รอจน Canvas วาดเสร็จ 100%
+        setDownloadUrl(canvas.toDataURL(`image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9));
       }
       setIsDone(true);
     } 
@@ -207,20 +204,19 @@ const handleConversion = async () => {
       ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       if (targetFormat === 'pdf') {
-        const { jsPDF } = (window as any).jspdf; // สำหรับ jspdf v2.5.1
+        const { jsPDF } = (window as any).jspdf; 
         const pdf = new jsPDF(canvas.width > canvas.height ? 'l' : 'p', 'px', [canvas.width, canvas.height]);
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, canvas.width, canvas.height);
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, canvas.width, canvas.height);
         setDownloadUrl(URL.createObjectURL(pdf.output('blob')));
       } else {
-        canvas.toBlob((blob) => {
-          if (blob) setDownloadUrl(URL.createObjectURL(blob));
-        }, `image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9);
+        // Image to Image: แก้ไฟล์ Corrupted โดยใช้ DataURL
+        setDownloadUrl(canvas.toDataURL(`image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9));
       }
       setIsDone(true);
     }
   } catch (e: any) {
     console.error(e);
-    alert(e.message || "การแปลงไฟล์ล้มเหลว");
+    alert("เกิดข้อผิดพลาด: " + e.message);
   } finally {
     setIsConverting(false);
   }

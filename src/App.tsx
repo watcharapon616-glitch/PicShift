@@ -5,10 +5,7 @@ import {
   FileText, ChevronRight, ShieldCheck, Globe, Cpu,
   HelpCircle, BookOpen, Lock
 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import heic2any from 'heic2any';
-import mammoth from 'mammoth';
-import * as XLSX from 'xlsx'; // สำหรับการจัดการ Excel
+import { jsPDF } from 'jspdf'
 import { THAI_FONT_BASE64 } from './thaiFont'; 
 
 export default function App() {

@@ -8,6 +8,7 @@ import {
 import { jsPDF } from 'jspdf';
 import heic2any from 'heic2any';
 import mammoth from 'mammoth';
+import * as XLSX from 'xlsx'; // สำหรับการจัดการ Excel
 import { THAI_FONT_BASE64 } from './thaiFont'; 
 
 export default function App() {
@@ -23,7 +24,9 @@ export default function App() {
   const [customH, setCustomH] = useState('5.0');
   const [unit, setUnit] = useState('cm');
 
+  // เช็คประเภทไฟล์
   const isWordFile = file?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file?.name.toLowerCase().endsWith('.docx');
+  const isExcelFile = file?.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file?.name.toLowerCase().endsWith('.xlsx');
 
   useEffect(() => {
     if (isDark) document.documentElement.classList.add('dark');
@@ -31,10 +34,10 @@ export default function App() {
   }, [isDark]);
 
   useEffect(() => {
-    if (isWordFile) {
+    if (isWordFile || isExcelFile) {
       setTargetFormat('pdf');
     }
-  }, [isWordFile]);
+  }, [isWordFile, isExcelFile]);
 
   const resetApp = useCallback(() => {
     if (downloadUrl && downloadUrl.startsWith('blob:')) {
@@ -47,6 +50,54 @@ export default function App() {
     setSelectedSize('original');
   }, [downloadUrl]);
 
+  const renderHtmlToPdf = async (htmlContent: string, isTable = false) => {
+    const doc = new jsPDF('p', 'pt', 'a4');
+
+    if (THAI_FONT_BASE64 && THAI_FONT_BASE64.length > 100) {
+      doc.addFileToVFS("Sarabun.ttf", THAI_FONT_BASE64);
+      doc.addFont("Sarabun.ttf", "Sarabun", "normal");
+      doc.setFont("Sarabun");
+    }
+
+    const container = document.createElement('div');
+    container.style.width = isTable ? '800px' : '500px'; 
+    container.style.padding = '40px';
+    container.style.backgroundColor = '#ffffff';
+    container.style.color = '#000000';
+    container.style.fontFamily = 'Sarabun'; 
+    container.style.fontSize = isTable ? '10pt' : '14pt';
+    container.style.lineHeight = '1.6';
+    container.innerHTML = htmlContent;
+
+    if (isTable) {
+      const tables = container.getElementsByTagName('table');
+      for (let i = 0; i < tables.length; i++) {
+        tables[i].style.borderCollapse = 'collapse';
+        tables[i].style.width = '100%';
+        const cells = tables[i].getElementsByTagName('td');
+        for (let j = 0; j < cells.length; j++) {
+          cells[j].style.border = '1px solid #ccc';
+          cells[j].style.padding = '4px';
+        }
+      }
+    }
+
+    document.body.appendChild(container);
+
+    await doc.html(container, {
+      callback: function (doc) {
+        document.body.removeChild(container);
+        setDownloadUrl(URL.createObjectURL(doc.output('blob')));
+        setIsDone(true);
+      },
+      x: 40,
+      y: 40,
+      width: 515,
+      windowWidth: isTable ? 850 : 515,
+      autoPaging: 'text'
+    });
+  };
+
   const handleConversion = async () => {
     if (!file) return;
     setIsConverting(true);
@@ -57,40 +108,15 @@ export default function App() {
       if (isWordFile) {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
-        const htmlContent = result.value;
-
-        const doc = new jsPDF('p', 'pt', 'a4');
-
-        if (THAI_FONT_BASE64 && THAI_FONT_BASE64.length > 100) {
-          doc.addFileToVFS("Sarabun.ttf", THAI_FONT_BASE64);
-          doc.addFont("Sarabun.ttf", "Sarabun", "normal");
-          doc.setFont("Sarabun");
-        }
-
-        const container = document.createElement('div');
-        container.style.width = '500px'; 
-        container.style.padding = '40px';
-        container.style.backgroundColor = '#ffffff';
-        container.style.color = '#000000';
-        container.style.fontFamily = 'Sarabun'; 
-        container.style.fontSize = '14pt';
-        container.style.lineHeight = '1.6';
-        container.innerHTML = htmlContent;
-
-        document.body.appendChild(container);
-
-        await doc.html(container, {
-          callback: function (doc) {
-            document.body.removeChild(container);
-            setDownloadUrl(URL.createObjectURL(doc.output('blob')));
-            setIsDone(true);
-          },
-          x: 40,
-          y: 40,
-          width: 515,
-          windowWidth: 515,
-          autoPaging: 'text'
-        });
+        await renderHtmlToPdf(result.value);
+      }
+      else if (isExcelFile) {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer);
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const htmlContent = XLSX.utils.sheet_to_html(worksheet);
+        await renderHtmlToPdf(htmlContent, true); 
       }
       else if (file.type === 'application/pdf') {
         const pdfjsURL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
@@ -116,7 +142,34 @@ export default function App() {
           const blob = await Packer.toBlob(doc);
           setDownloadUrl(URL.createObjectURL(blob));
           setIsDone(true);
-        } else {
+        } 
+        else if (targetFormat === 'excel') {
+          let allData: string[][] = [];
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const lines: any = {};
+            textContent.items.forEach((item: any) => {
+              const y = Math.round(item.transform[5]);
+              if (!lines[y]) lines[y] = [];
+              lines[y].push(item);
+            });
+            const sortedY = Object.keys(lines).sort((a, b) => Number(b) - Number(a));
+            sortedY.forEach(y => {
+              const row = lines[y].sort((a: any, b: any) => a.transform[4] - b.transform[4])
+                                  .map((item: any) => item.str);
+              allData.push(row);
+            });
+          }
+          const ws = XLSX.utils.aoa_to_sheet(allData);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+          const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+          const blob = new Blob([wbout], { type: 'application/octet-stream' });
+          setDownloadUrl(URL.createObjectURL(blob));
+          setIsDone(true);
+        }
+        else {
           const page = await pdf.getPage(1);
           const viewport = page.getViewport({ scale: 2.0 });
           canvas.width = viewport.width;
@@ -179,8 +232,6 @@ export default function App() {
 
   return (
     <div className={`min-h-screen w-full flex flex-col transition-colors duration-500 font-sans ${isDark ? 'bg-[#030712] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      
-      {/* Navigation */}
       <nav className={`fixed top-0 w-full z-50 border-b ${isDark ? 'bg-slate-950/80 border-white/5' : 'bg-white/80 border-slate-200'} backdrop-blur-md`}>
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -201,23 +252,22 @@ export default function App() {
       </nav>
 
       <main className="flex-1 flex flex-col items-center pt-32 pb-20 px-6">
-        {/* Converter Section */}
+        {/* Main Card */}
         <div className="w-full max-w-xl mb-0">
           <div className={`rounded-[3rem] border overflow-hidden shadow-2xl transition-all duration-500 ${isDark ? 'bg-slate-900/40 border-white/10 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200'}`}>
-            
             {!file ? (
               <label className="group cursor-pointer block">
                 <input type="file" hidden onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <div className="py-32  flex flex-col items-center text-center px-10">
+                <div className="py-32 flex flex-col items-center text-center px-10">
                   <div className="w-24 h-24 rounded-[2.5rem] bg-blue-600/10 text-blue-500 border border-blue-500/20 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-xl shadow-blue-500/5">
                     <FileUp size={44} />
                   </div>
                   <h2 className="text-3xl font-black mb-3 tracking-tight">Drop your file here</h2>
                   <p className="text-sm opacity-50 font-medium max-w-[280px] leading-relaxed">
-                    Convert JPG, PNG, HEIC, PDF, and DOCX documents instantly in your browser.
+                    Convert JPG, PNG, HEIC, PDF, DOCX, and XLSX documents instantly in your browser.
                   </p>
                   <div className="mt-8 flex gap-2">
-                    {['SECURE','LOCAL','THAI FONT READY'].map(t => (
+                    {['SECURE','LOCAL','OFFICE READY'].map(t => (
                       <span key={t} className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[9px] font-black tracking-widest">{t}</span>
                     ))}
                   </div>
@@ -226,8 +276,8 @@ export default function App() {
             ) : (
               <div className="p-10 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className={`flex items-center gap-5 p-5 rounded-[2rem] border ${isDark ? 'bg-black/40 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${ (file.type === 'application/pdf' || isWordFile) ? 'bg-rose-500/20 text-rose-500' : 'bg-blue-500/20 text-blue-500'}`}>
-                    {(file.type === 'application/pdf' || isWordFile) ? <FileText size={28} /> : <ImageIcon size={28} />}
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${ (file.type === 'application/pdf' || isWordFile || isExcelFile) ? 'bg-rose-500/20 text-rose-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                    {(file.type === 'application/pdf' || isWordFile || isExcelFile) ? <FileText size={28} /> : <ImageIcon size={28} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-lg font-black truncate leading-tight mb-1">{file.name}</p>
@@ -241,7 +291,12 @@ export default function App() {
                     <div className="space-y-4">
                       <label className="text-xs font-black uppercase tracking-widest opacity-40 px-2">Convert to</label>
                       <div className="grid grid-cols-3 gap-3">
-                        {(isWordFile ? ['pdf'] : file.type === 'application/pdf' ? ['jpg', 'png', 'word'] : ['jpg', 'png', 'pdf']).map(fmt => (
+                        {(isWordFile || isExcelFile 
+                          ? ['pdf'] 
+                          : file.type === 'application/pdf' 
+                            ? ['jpg', 'png', 'word', 'excel']
+                            : ['jpg', 'png', 'pdf']
+                        ).map(fmt => (
                           <button 
                             key={fmt} 
                             onClick={() => setTargetFormat(fmt)} 
@@ -256,12 +311,19 @@ export default function App() {
                       </div>
                     </div>
 
-                    {file.type !== 'application/pdf' && !isWordFile && (
+                    {file.type !== 'application/pdf' && !isWordFile && !isExcelFile && (
                       <div className="space-y-6">
                         <label className="text-xs font-black uppercase tracking-widest opacity-40 px-2">Dimension Settings</label>
-                        <div className="flex bg-slate-100 dark:bg-black/40 p-2 rounded-[1.5rem] border border-white/5">
+                        <div className="flex bg-slate-200/50 dark:bg-black/40 p-2 rounded-[1.5rem] border border-slate-200 dark:border-white/5">
                           {['original', 'custom'].map(m => (
-                            <button key={m} onClick={() => setSelectedSize(m)} className={`flex-1 py-4 rounded-xl font-black text-xs uppercase transition-all duration-300 ${selectedSize === m ? 'bg-white dark:bg-slate-800 text-blue-500 shadow-xl' : 'opacity-40 hover:opacity-60'}`}>
+                            <button 
+                              key={m} 
+                              onClick={() => setSelectedSize(m)} 
+                              className={`flex-1 py-4 rounded-xl font-black text-xs uppercase transition-all duration-300 
+                                ${selectedSize === m 
+                                  ? 'bg-white dark:bg-slate-800 text-white dark:text-white shadow-lg' 
+                                  : 'text-slate-500 dark:text-slate-500 hover:text-blue-600 dark:hover:text-white'}`}
+                            >
                               {m === 'original' ? 'Original Size' : 'Custom Size'}
                             </button>
                           ))}
@@ -269,13 +331,22 @@ export default function App() {
                       </div>
                     )}
 
-                    {selectedSize === 'custom' && file.type !== 'application/pdf' && !isWordFile && (
+                    {selectedSize === 'custom' && file.type !== 'application/pdf' && !isWordFile && !isExcelFile && (
                       <div className={`p-8 rounded-[2.5rem] border animate-in slide-in-from-top-2 duration-300 ${isDark ? 'bg-black/40 border-white/5' : 'bg-slate-50 border-slate-200'} space-y-8`}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black opacity-40 uppercase tracking-widest">Select Unit</span>
                           <div className="flex gap-2 p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
                             {['cm', 'inch'].map(u => (
-                              <button key={u} onClick={() => setUnit(u)} className={`px-5 py-2 rounded-lg text-[10px] font-black transition-all ${unit === u ? 'bg-blue-600 text-white shadow-lg' : 'opacity-40'}`}>{u}</button>
+                              <button 
+                                key={u} 
+                                onClick={() => setUnit(u)} 
+                                className={`px-5 py-2 rounded-lg text-[10px] font-black transition-all 
+                                  ${unit === u 
+                                    ? 'bg-blue-600 text-white shadow-lg' 
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                              >
+                                {u}
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -306,7 +377,7 @@ export default function App() {
                       <p className="text-xs opacity-40 font-bold uppercase tracking-[0.2em]">Your file is ready for download</p>
                     </div>
                     <div className="space-y-4 pt-6">
-                      <a href={downloadUrl!} download={`PicShift_${targetFormat}_${Date.now()}.${targetFormat === 'word' ? 'docx' : targetFormat}`} className="w-full bg-emerald-600 hover:bg-emerald-500 py-6 rounded-[2rem] text-white font-black text-lg flex items-center justify-center gap-4 shadow-[0_20px_40px_rgba(16,185,129,0.25)] transition-all active:scale-95">
+                      <a href={downloadUrl!} download={`PicShift_${targetFormat}_${Date.now()}.${targetFormat === 'word' ? 'docx' : targetFormat === 'excel' ? 'xlsx' : targetFormat}`} className="w-full bg-emerald-600 hover:bg-emerald-500 py-6 rounded-[2rem] text-white font-black text-lg flex items-center justify-center gap-4 shadow-[0_20px_40px_rgba(16,185,129,0.25)] transition-all active:scale-95">
                         <Download size={28} /> <span>Download Result</span>
                       </a>
                       <button onClick={resetApp} className="text-[11px] font-black uppercase tracking-[0.5em] opacity-20 hover:opacity-100 transition-all pt-4">
@@ -323,7 +394,7 @@ export default function App() {
           </p>
         </div>
 
-        {/* Feature Cards */}
+        {/* Features Grid */}
         <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-8 mt-0 border-t border-white/5 pt-20">
           <div className="space-y-4">
             <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
@@ -337,7 +408,7 @@ export default function App() {
               <Globe size={24} />
             </div>
             <h4 className="font-black text-lg">Universal Formats</h4>
-            <p className="text-sm opacity-50 leading-relaxed">Seamlessly convert between JPG, PNG, PDF, and DOCX. Full support for modern Apple HEIC files.</p>
+            <p className="text-sm opacity-50 leading-relaxed">Seamlessly convert between JPG, PNG, PDF, DOCX, and XLSX. Full support for modern Apple HEIC files.</p>
           </div>
           <div className="space-y-4">
             <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500">
@@ -348,10 +419,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* --- GLOBAL SECTION: ARTICLES & FAQ --- */}
         <div className="w-full max-w-4xl mt-32 space-y-24">
-          
-          {/* Global Technology Section */}
           <section className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black tracking-widest uppercase">
@@ -362,57 +430,51 @@ export default function App() {
                 <span className="text-blue-500">Multi-Language Rendering</span>
               </h3>
               <p className="opacity-60 leading-relaxed text-sm">
-                PicShift uses advanced client-side rendering to ensure your documents look identical to the original. Our engine supports complex character sets, including **Full Thai Font integration (TH Sarabun New)**, preventing the common "broken layout" or "floating vowel" issues found in other converters.
+                PicShift uses advanced client-side rendering to ensure your documents look identical to the original. Our engine supports complex character sets, including **Full Thai Font integration (TH Sarabun New)**, preventing layout issues.
               </p>
               <div className="flex gap-4">
                 <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase">
                   <CheckCircle2 size={16}/> Thai Font Ready
                 </div>
                 <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase">
-                  <CheckCircle2 size={16}/> Unicode Support
+                  <CheckCircle2 size={16}/> Office Support
                 </div>
               </div>
             </div>
             <div className={`p-8 rounded-[2.5rem] border ${isDark ? 'bg-slate-900 border-white/5' : 'bg-white border-slate-200'} shadow-xl`}>
                <div className="space-y-4">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-black opacity-40 uppercase">Global Font Support</span>
+                    <span className="text-[10px] font-black opacity-40 uppercase">Excel & Word Engine</span>
                     <span className="text-[10px] font-black text-blue-500 uppercase">Active</span>
                   </div>
                   <div className="h-2 w-full bg-blue-500/20 rounded-full"></div>
                   <div className="h-2 w-5/6 bg-slate-500/10 rounded-full"></div>
                   <div className="h-2 w-full bg-slate-500/10 rounded-full"></div>
-                  <div className="pt-4 flex justify-between items-center border-t border-white/5">
-                    <span className="text-[10px] font-black opacity-40 uppercase">Optimized for</span>
-                    <span className="text-[10px] font-black text-emerald-500 uppercase">TH / EN / MULTI-LANG ✅</span>
-                  </div>
                </div>
             </div>
           </section>
 
-          {/* Global FAQ Section */}
           <section className="space-y-12">
             <div className="text-center space-y-4">
               <h3 className="text-3xl font-black tracking-tight">Frequently Asked Questions</h3>
-              <p className="opacity-40 text-sm font-bold uppercase tracking-widest">Global Support & Privacy Standards</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
                 {
                   q: "Is my data safe with PicShift?",
-                  a: "Absolutely. We utilize 100% Client-Side processing. Your files never touch our servers, meaning your private data stays on your machine throughout the entire conversion process."
+                  a: "Absolutely. We utilize 100% Client-Side processing. Your files never touch our servers."
                 },
                 {
-                  q: "Does it support Thai fonts (สระไม่ลอย)?",
-                  a: "Yes! We specialize in complex scripts. Our PDF engine is pre-loaded with standard Thai fonts like TH Sarabun New to ensure perfect rendering without broken characters."
+                  q: "Does it support Thai fonts?",
+                  a: "Yes! Our PDF engine is pre-loaded with TH Sarabun New to ensure perfect rendering without broken characters."
                 },
                 {
-                  q: "Is PicShift free to use?",
-                  a: "PicShift is 100% free with no registration required. We believe in providing high-quality tools for the modern web without artificial limitations or daily caps."
+                  q: "Can I convert Excel to PDF?",
+                  a: "Yes, PicShift now supports XLSX to PDF conversion with table formatting preserved."
                 },
                 {
-                  q: "Can I convert HEIC from iPhone?",
-                  a: "Definitely. Just drag your Apple HEIC files into the converter and select JPG or PNG. Our tool handles the conversion instantly in your browser."
+                  q: "Is PicShift free?",
+                  a: "100% free with no registration or daily limits."
                 }
               ].map((faq, i) => (
                 <div key={i} className={`p-8 rounded-3xl border ${isDark ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'} space-y-4`}>
@@ -426,27 +488,31 @@ export default function App() {
             </div>
           </section>
 
-          {/* Privacy Note (Global Standard) */}
-          <section className={`p-12 rounded-[3rem] border ${isDark ? 'bg-gradient-to-br from-blue-900/20 to-transparent border-blue-500/10' : 'bg-blue-50 border-blue-100'} text-center space-y-6`}>
-            <div className="w-16 h-16 bg-blue-500/20 text-blue-500 rounded-2xl flex items-center justify-center mx-auto">
+          {/* New Section: Privacy Policy & Security (ADDED) */}
+          <section className={`rounded-[3rem] p-12 text-center space-y-8 transition-all duration-500 ${isDark ? 'bg-blue-600/5 border border-blue-500/10' : 'bg-blue-50 border border-blue-100'}`}>
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg ${isDark ? 'bg-blue-600/20 text-blue-400' : 'bg-white text-blue-600'}`}>
               <Lock size={32} />
             </div>
-            <h3 className="text-2xl font-black tracking-tight">Privacy Policy & Security</h3>
-            <p className="max-w-2xl mx-auto opacity-70 leading-relaxed text-sm">
-              We value your privacy. PicShift does not collect personal data, usage patterns, or store your files. Everything is processed via your browser's memory and cleared instantly once you close the session.
+            <h3 className="text-3xl font-black tracking-tight">Privacy Policy & Security</h3>
+            <p className={`max-w-2xl mx-auto leading-relaxed ${isDark ? 'opacity-60' : 'text-slate-600'}`}>
+              We value your privacy. <span className="font-bold text-blue-500">PicShift</span> does not collect personal data, usage patterns, or store your files. Everything is processed via your browser's memory and cleared instantly once you close the session.
             </p>
           </section>
-
         </div>
       </main>
 
-      <footer className="py-20 border-t border-white/5 text-center space-y-6">
-        <div className="flex justify-center gap-8 text-[10px] font-black uppercase tracking-[0.2em] opacity-40">
-           <a href="#" className="hover:text-blue-500 transition-colors">Privacy Policy</a>
-           <a href="#" className="hover:text-blue-500 transition-colors">Terms of Service</a>
-           <a href="#" className="hover:text-blue-500 transition-colors">About Us</a>
+      {/* Footer (MODIFIED TO INCLUDE LINKS) */}
+      <footer className="py-20 border-t border-white/5 flex flex-col items-center gap-8">
+        <div className="flex flex-wrap justify-center gap-x-12 gap-y-4">
+          {['Privacy Policy', 'Terms of Service', 'About Us'].map(link => (
+            <a key={link} href="#" className="text-[11px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">
+              {link}
+            </a>
+          ))}
         </div>
-        <p className="text-[10px] font-bold opacity-20 uppercase tracking-[0.2em]">© 2026 PicShift Global • Built for the Modern Web</p>
+        <p className="text-[10px] font-bold opacity-20 uppercase tracking-[0.2em]">
+          © 2026 PicShift Global • Built for the Modern Web
+        </p>
       </footer>
     </div>
   );

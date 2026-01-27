@@ -98,137 +98,136 @@ export default function App() {
     });
   };
 
-  const handleConversion = async () => {
-    if (!file) return;
-    setIsConverting(true);
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+const handleConversion = async () => {
+  if (!file) return;
+  setIsConverting(true);
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
 
-      if (isWordFile) {
-        const arrayBuffer = await file.arrayBuffer();
-        const result = await mammoth.convertToHtml({ arrayBuffer });
-        await renderHtmlToPdf(result.value);
-      }
-      else if (isExcelFile) {
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer);
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const htmlContent = XLSX.utils.sheet_to_html(worksheet);
-        await renderHtmlToPdf(htmlContent, true); 
-      }
-      else if (file.type === 'application/pdf') {
-        const pdfjsURL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
-        const pdfjsLib = await import(/* @vite-ignore */ pdfjsURL);
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
-        
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    // --- CASE 1: WORD TO PDF (Mammoth) ---
+    if (isWordFile) {
+      const mammothLib = (window as any).mammoth; // ดึงจากสคริปต์ที่คุณโหลดใน html
+      if (!mammothLib) throw new Error("ระบบ Word กำลังโหลด หรือโหลดไม่สำเร็จ");
 
-        if (targetFormat === 'word') {
-          const docxURL = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js';
-          await import(/* @vite-ignore */ docxURL);
-          let fullText = "";
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            fullText += textContent.items.map((item: any) => item.str).join(' ') + "\n\n";
-          }
-          const { Document, Packer, Paragraph, TextRun } = (window as any).docx;
-          const doc = new Document({
-            sections: [{ children: [new Paragraph({ children: [new TextRun(fullText)] })] }],
-          });
-          const blob = await Packer.toBlob(doc);
-          setDownloadUrl(URL.createObjectURL(blob));
-          setIsDone(true);
-        } 
-        else if (targetFormat === 'excel') {
-          let allData: string[][] = [];
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const lines: any = {};
-            textContent.items.forEach((item: any) => {
-              const y = Math.round(item.transform[5]);
-              if (!lines[y]) lines[y] = [];
-              lines[y].push(item);
-            });
-            const sortedY = Object.keys(lines).sort((a, b) => Number(b) - Number(a));
-            sortedY.forEach(y => {
-              const row = lines[y].sort((a: any, b: any) => a.transform[4] - b.transform[4])
-                                  .map((item: any) => item.str);
-              allData.push(row);
-            });
-          }
-          const ws = XLSX.utils.aoa_to_sheet(allData);
-          const wb = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-          const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-          const blob = new Blob([wbout], { type: 'application/octet-stream' });
-          setDownloadUrl(URL.createObjectURL(blob));
-          setIsDone(true);
-        }
-        else {
-          const page = await pdf.getPage(1);
-          const viewport = page.getViewport({ scale: 2.0 });
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          await page.render({ canvasContext: ctx!, viewport }).promise;
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammothLib.convertToHtml({ arrayBuffer });
+      await renderHtmlToPdf(result.value);
+    } 
+    // --- CASE 2: EXCEL TO PDF (XLSX) ---
+    else if (isExcelFile) {
+      const XLSX = (window as any).XLSX;
+      if (!XLSX) throw new Error("ระบบ Excel ยังไม่พร้อมใช้งาน");
 
-          canvas.toBlob((blob) => {
-            if (blob) {
-              setDownloadUrl(URL.createObjectURL(blob));
-              setIsDone(true);
-            }
-          }, `image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9);
+      const arrayBuffer = await file.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const htmlContent = XLSX.utils.sheet_to_html(worksheet);
+      await renderHtmlToPdf(htmlContent, true); 
+    } 
+    // --- CASE 3: PDF TO OTHERS (Image, Word, Excel) ---
+    else if (file.type === 'application/pdf') {
+      const pdfjsURL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+      const pdfjsLib = await import(/* @vite-ignore */ pdfjsURL);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      if (targetFormat === 'word') {
+        const docxURL = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js';
+        await import(/* @vite-ignore */ docxURL);
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          fullText += textContent.items.map((item: any) => item.str).join(' ') + "\n\n";
         }
-      } 
-      else {
-        let currentFile: any = file;
-        if (file.name.toLowerCase().endsWith('.heic')) {
-          currentFile = await heic2any({ blob: file, toType: "image/jpeg" });
-        }
-        
-        const img = new Image();
-        const objectUrl = URL.createObjectURL(currentFile);
-        img.src = objectUrl;
-        
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
+        const { Document, Packer, Paragraph, TextRun } = (window as any).docx;
+        const doc = new Document({
+          sections: [{ children: [new Paragraph({ children: [new TextRun(fullText)] })] }],
         });
-
-        const factor = unit === 'inch' ? 300 : 118.11;
-        let finalW = selectedSize === 'original' ? img.width : parseFloat(customW) * factor;
-        let finalH = selectedSize === 'original' ? img.height : parseFloat(customH) * factor;
-        
-        canvas.width = finalW;
-        canvas.height = finalH;
-        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(objectUrl);
-
-        if (targetFormat === 'pdf') {
-          const pdf = new jsPDF(canvas.width > canvas.height ? 'l' : 'p', 'px', [canvas.width, canvas.height]);
-          pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, canvas.width, canvas.height);
-          setDownloadUrl(URL.createObjectURL(pdf.output('blob')));
-          setIsDone(true);
-        } else {
-          canvas.toBlob((blob) => {
-            if (blob) {
-              setDownloadUrl(URL.createObjectURL(blob));
-              setIsDone(true);
-            }
-          }, `image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9);
+        const blob = await Packer.toBlob(doc);
+        setDownloadUrl(URL.createObjectURL(blob));
+      } 
+      else if (targetFormat === 'excel') {
+        const XLSX_LIB = (window as any).XLSX;
+        let allData: string[][] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const lines: any = {};
+          textContent.items.forEach((item: any) => {
+            const y = Math.round(item.transform[5]);
+            if (!lines[y]) lines[y] = [];
+            lines[y].push(item);
+          });
+          const sortedY = Object.keys(lines).sort((a, b) => Number(b) - Number(a));
+          sortedY.forEach(y => {
+            const row = lines[y].sort((a: any, b: any) => a.transform[4] - b.transform[4]).map((item: any) => item.str);
+            allData.push(row);
+          });
         }
+        const ws = XLSX_LIB.utils.aoa_to_sheet(allData);
+        const wb = XLSX_LIB.utils.book_new();
+        XLSX_LIB.utils.book_append_sheet(wb, ws, "Sheet1");
+        const wbout = XLSX_LIB.write(wb, { bookType: 'xlsx', type: 'array' });
+        setDownloadUrl(URL.createObjectURL(new Blob([wbout])));
       }
-    } catch (e) {
-      console.error(e);
-      alert("Conversion failed. Please try a different file.");
-    } finally {
-      setIsConverting(false);
+      else {
+        // PDF to Image
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2.0 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx!, viewport }).promise;
+
+        canvas.toBlob((blob) => {
+          if (blob) setDownloadUrl(URL.createObjectURL(blob));
+        }, `image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9);
+      }
+      setIsDone(true);
+    } 
+    // --- CASE 4: IMAGE TO OTHERS & HEIC ---
+    else {
+      let currentFile: any = file;
+      if (file.name.toLowerCase().endsWith('.heic')) {
+        currentFile = await (window as any).heic2any({ blob: file, toType: "image/jpeg" });
+      }
+      
+      const img = new Image();
+      img.src = URL.createObjectURL(currentFile);
+      await new Promise((resolve) => img.onload = resolve);
+
+      const factor = unit === 'inch' ? 300 : 118.11;
+      let finalW = selectedSize === 'original' ? img.width : parseFloat(customW) * factor;
+      let finalH = selectedSize === 'original' ? img.height : parseFloat(customH) * factor;
+      
+      canvas.width = finalW;
+      canvas.height = finalH;
+      ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      if (targetFormat === 'pdf') {
+        const { jsPDF } = (window as any).jspdf; // สำหรับ jspdf v2.5.1
+        const pdf = new jsPDF(canvas.width > canvas.height ? 'l' : 'p', 'px', [canvas.width, canvas.height]);
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, canvas.width, canvas.height);
+        setDownloadUrl(URL.createObjectURL(pdf.output('blob')));
+      } else {
+        canvas.toBlob((blob) => {
+          if (blob) setDownloadUrl(URL.createObjectURL(blob));
+        }, `image/${targetFormat === 'png' ? 'png' : 'jpeg'}`, 0.9);
+      }
+      setIsDone(true);
     }
-  };
+  } catch (e: any) {
+    console.error(e);
+    alert(e.message || "การแปลงไฟล์ล้มเหลว");
+  } finally {
+    setIsConverting(false);
+  }
+};
 
   return (
     <div className={`min-h-screen w-full flex flex-col transition-colors duration-500 font-sans ${isDark ? 'bg-[#030712] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>

@@ -129,21 +129,86 @@ export default function App() {
 
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
         if (targetFormat === 'word') {
-          // Logic Word เดิมของคุณ
           const docxURL = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js';
           await import(/* @vite-ignore */ docxURL);
-          let fullText = "";
+          const { Document, Packer, Paragraph, TextRun } = (window as any).docx;
+
+          const docSections = [];
+
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
-            fullText += textContent.items.map((item: any) => item.str).join(' ') + "\n\n";
+
+            // เรียงลำดับพิกัด Y (บนลงล่าง) และ X (ซ้ายไปขวา)
+            const items = textContent.items.sort((a, b) => {
+              const yDiff = b.transform[5] - a.transform[5];
+              if (Math.abs(yDiff) > 5) return yDiff;
+              return a.transform[4] - b.transform[4];
+            });
+
+            let lastY = -1;
+            let lastX = -1;
+            let paragraphs = [];
+            let currentLineText = "";
+            let firstXInLine = -1;
+
+            items.forEach((item: any) => {
+              const currentY = item.transform[5];
+              const currentX = item.transform[4];
+              const text = item.str;
+
+              // เมื่อขึ้นบรรทัดใหม่
+              if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
+                if (currentLineText.trim() !== "") {
+                  const isThai = /[\u0E00-\u0E7F]/.test(currentLineText);
+
+                  // จุดสำคัญ: ปรับเป็น 120+ ถึงจะมองเป็นย่อหน้า (Tab)
+                  const needsIndent = firstXInLine > 120;
+
+                  paragraphs.push(new Paragraph({
+                    children: [new TextRun({
+                      text: (needsIndent ? "\t" : "") + currentLineText,
+                      font: isThai ? "TH Sarabun New" : "Calibri",
+                      size: isThai ? 32 : 24,
+                    })],
+                    // ลดระยะบรรทัดให้ดูเป็นระเบียบเหมือนต้นฉบับ
+                    spacing: { before: 0, after: 0, line: 300 }
+                  }));
+                }
+                currentLineText = "";
+                firstXInLine = currentX;
+              }
+
+              if (firstXInLine === -1) firstXInLine = currentX;
+
+              // จัดการช่องว่างระหว่างกลุ่มคำ (ป้องกันคำติดกัน)
+              if (lastX !== -1 && Math.abs(currentY - lastY) <= 5 && (currentX - lastX) > 10) {
+                currentLineText += " ";
+              }
+
+              currentLineText += text;
+              lastY = currentY;
+              lastX = currentX + (item.width || 0);
+            });
+
+            // เก็บตกบรรทัดสุดท้าย
+            if (currentLineText.trim() !== "") {
+              const isThai = /[\u0E00-\u0E7F]/.test(currentLineText);
+              paragraphs.push(new Paragraph({
+                children: [new TextRun({
+                  text: (firstXInLine > 120 ? "\t" : "") + currentLineText,
+                  font: isThai ? "TH Sarabun New" : "Calibri",
+                  size: isThai ? 32 : 24
+                })],
+                spacing: { before: 0, after: 0, line: 300 }
+              }));
+            }
+
+            docSections.push({ children: paragraphs });
           }
-          const { Document, Packer, Paragraph, TextRun } = (window as any).docx;
-          const doc = new Document({
-            sections: [{ children: [new Paragraph({ children: [new TextRun(fullText)] })] }],
-          });
+
+          const doc = new Document({ sections: docSections });
           const blob = await Packer.toBlob(doc);
           setDownloadUrl(URL.createObjectURL(blob));
         }

@@ -141,7 +141,7 @@ export default function App() {
             const textContent = await page.getTextContent();
 
             // เรียงลำดับพิกัด Y (บนลงล่าง) และ X (ซ้ายไปขวา)
-            const items = textContent.items.sort((a, b) => {
+            const items = textContent.items.sort((a: any, b: any) => {
               const yDiff = b.transform[5] - a.transform[5];
               if (Math.abs(yDiff) > 5) return yDiff;
               return a.transform[4] - b.transform[4];

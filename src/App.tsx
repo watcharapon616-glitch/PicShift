@@ -3,7 +3,7 @@ import {
   FileUp, X, CheckCircle2, Download, Zap, ExternalLink, ChevronDown,
   ImageIcon, Loader2, Sun, Moon,
   FileText, ChevronRight, ShieldCheck, Globe, Cpu,
-  HelpCircle, BookOpen, Lock, Menu
+  HelpCircle, BookOpen, Lock,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf'
 import { THAI_FONT_BASE64 } from './thaiFont';

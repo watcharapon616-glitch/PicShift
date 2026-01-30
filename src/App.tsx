@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  FileUp, X, CheckCircle2, Download, Zap,
+  FileUp, X, CheckCircle2, Download, Zap, ExternalLink, ChevronDown,
   ImageIcon, Loader2, Sun, Moon,
   FileText, ChevronRight, ShieldCheck, Globe, Cpu,
-  HelpCircle, BookOpen, Lock
+  HelpCircle, BookOpen, Lock, Menu
 } from 'lucide-react';
 import { jsPDF } from 'jspdf'
 import { THAI_FONT_BASE64 } from './thaiFont';
@@ -16,7 +16,7 @@ export default function App() {
   const [targetFormat, setTargetFormat] = useState('jpg');
   const [selectedSize, setSelectedSize] = useState('original');
   const [isDark, setIsDark] = useState(false);
-
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [customW, setCustomW] = useState('5.0');
   const [customH, setCustomH] = useState('5.0');
   const [unit, setUnit] = useState('cm');
@@ -325,21 +325,94 @@ export default function App() {
   return (
     <div className={`min-h-screen w-full flex flex-col transition-colors duration-500 font-sans ${isDark ? 'bg-[#030712] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <nav className={`fixed top-0 w-full z-50 border-b ${isDark ? 'bg-slate-950/80 border-white/5' : 'bg-white/80 border-slate-200'} backdrop-blur-md`}>
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
-              <Zap size={24} className="text-white fill-current" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between relative">
+
+          {/* ฝั่งซ้าย: Logo */}
+          <div className="flex items-center gap-2 sm:gap-3 z-[60]">
+            <div className="bg-blue-600 p-1.5 sm:p-2 rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20">
+              <Zap size={20} className="text-white fill-current sm:w-6 sm:h-6" />
             </div>
-            <span className="font-black text-2xl italic uppercase tracking-tighter bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+            <span className="font-black text-xl sm:text-2xl italic uppercase tracking-tighter bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
               PicShift
             </span>
           </div>
-          <button
-            onClick={() => setIsDark(!isDark)}
-            className={`p-3 rounded-2xl border transition-all hover:scale-110 active:scale-95 ${isDark ? 'bg-slate-900 border-white/10 text-yellow-400' : 'bg-white border-slate-200 text-blue-600 shadow-sm'}`}
-          >
-            {isDark ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
+
+          {/* ตรงกลาง: SEO Content - เน้นความจริงใจและไฟล์ที่คนใช้เยอะ */}
+          <div className="absolute left-1/2 -translate-x-1/2 hidden lg:flex items-center gap-4 pointer-events-none whitespace-nowrap">
+            <div className="flex flex-col items-center">
+              {/* เน้นว่าเป็นเครื่องมือฟรีที่แปลงไฟล์ได้ทันที */}
+              <h2 className={`text-[13px] font-black tracking-[0.15em] uppercase flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-slate-600'}`}>
+                Free Online <span className="text-blue-500">Image , PDF, Word & Excel</span> Converter
+              </h2>
+
+              {/* ระบุชื่อไฟล์ชัดๆ ให้ Google Bot มาเก็บข้อมูลได้ง่ายขึ้น */}
+              <p className={`text-[9px] font-bold tracking-[0.25em] uppercase mt-1 opacity-70 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                JPG • PNG • PDF • HEIC • DOCX • XLSX
+              </p>
+            </div>
+          </div>
+
+          {/* ฝั่งขวา: Actions */}
+          <div className="flex items-center gap-2 sm:gap-3 z-[60]">
+
+            {/* Dropdown Menu: More Tools */}
+            <div
+              className="relative group"
+              onMouseEnter={() => setIsMenuOpen(true)}
+              onMouseLeave={() => setIsMenuOpen(false)}
+            >
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl border transition-all ${isDark
+                  ? 'bg-slate-900 border-white/10 text-slate-300'
+                  : 'bg-white border-slate-200 text-slate-600 shadow-sm'
+                  }`}
+              >
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest">Tools</span>
+                <ChevronDown size={14} className={`transition-transform duration-300 ${isMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* รายการใน Dropdown */}
+              <div className={`absolute top-full right-0 pt-2 w-60 sm:w-64 transition-all duration-200 origin-top-right ${isMenuOpen
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 translate-y-2 pointer-events-none'
+                }`}>
+
+                <div className={`rounded-2xl border shadow-2xl overflow-hidden ${isDark ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-100'}`}>
+                  <div className={`px-4 py-3 border-b text-[10px] font-black uppercase tracking-[0.2em] ${isDark ? 'border-white/5 text-slate-500' : 'border-slate-50 text-slate-400'}`}>
+                    Eco-System Projects
+                  </div>
+
+                  <a
+                    href="https://coinshift.zynksite.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center justify-between px-4 py-4 transition-colors ${isDark ? 'hover:bg-white/5 text-slate-200' : 'hover:bg-slate-50 text-slate-700'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center shadow-lg shadow-yellow-500/20">
+                        <span className="text-white text-xs font-black italic">$</span>
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-bold leading-none">CoinShift</span>
+                        <span className="text-[10px] text-slate-500 mt-1">Crypto Converter</span>
+                      </div>
+                    </div>
+                    <ExternalLink size={14} className="text-slate-500" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Theme Button */}
+            <button
+              onClick={() => setIsDark(!isDark)}
+              className={`p-2.5 sm:p-3 rounded-xl border transition-all hover:scale-110 active:scale-95 ${isDark ? 'bg-slate-900 border-white/10 text-yellow-400' : 'bg-white border-slate-200 text-blue-600 shadow-sm'}`}
+            >
+              {isDark ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+          </div>
+
         </div>
       </nav>
 
@@ -594,17 +667,62 @@ export default function App() {
       </main>
 
       {/* Footer (MODIFIED TO INCLUDE LINKS) */}
-      <footer className="py-20 border-t border-white/5 flex flex-col items-center gap-8">
-        <div className="flex flex-wrap justify-center gap-x-12 gap-y-4">
-          {['Privacy Policy', 'Terms of Service', 'About Us'].map(link => (
-            <a key={link} href="#" className="text-[11px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">
-              {link}
-            </a>
-          ))}
+      <footer className={`py-20 border-t ${isDark ? 'border-white/5' : 'border-slate-200'} flex flex-col items-center gap-12`}>
+
+        {/* ส่วนที่ 1: Popular Tools (SEO Booster) */}
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-8 w-full text-center md:text-left">
+          <div className="flex flex-col gap-3">
+            <h3 className={`text-[11px] font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Image Tools</h3>
+            <ul className={`text-[12px] flex flex-col gap-2 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              <li><a href="#" className="hover:text-blue-500 transition-colors">Convert JPG to PNG</a></li>
+              <li><a href="#" className="hover:text-blue-500 transition-colors">HEIC to JPG Converter</a></li>
+              <li><a href="#" className="hover:text-blue-500 transition-colors">PDF to WebP</a></li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <h3 className={`text-[11px] font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Document Tools</h3>
+            <ul className={`text-[12px] flex flex-col gap-2 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              <li><a href="#" className="hover:text-blue-500 transition-colors">PDF to Word</a></li>
+              <li><a href="#" className="hover:text-blue-500 transition-colors">PDF to Excel</a></li>
+              <li><a href="#" className="hover:text-blue-500 transition-colors">PDF to Image</a></li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <h3 className={`text-[11px] font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Privacy</h3>
+            <ul className={`text-[12px] flex flex-col gap-2 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              <li>100% Browser Based</li>
+              <li>No Files Uploaded</li>
+              <li>Secure & Private</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <h3 className={`text-[11px] font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Developer</h3>
+            <ul className={`text-[12px] flex flex-col gap-2 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              <li>Next-Gen Rendering</li>
+              <li>Fast Conversion</li>
+              <li>Clean Interface</li>
+            </ul>
+          </div>
         </div>
-        <p className="text-[10px] font-bold opacity-20 uppercase tracking-[0.2em]">
-          © 2026 PicShift Global • Built for the Modern Web
-        </p>
+
+        <hr className={`w-full max-w-7xl border-t ${isDark ? 'border-white/5' : 'border-slate-100'}`} />
+
+        {/* ส่วนที่ 2: Links & Copyright */}
+        <div className="flex flex-col items-center gap-6">
+          <div className="flex flex-wrap justify-center gap-x-12 gap-y-4">
+            {['Privacy Policy', 'Terms of Service', 'About Us'].map(link => (
+              <a key={link} href="#" className={`text-[11px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {link}
+              </a>
+            ))}
+          </div>
+          <p className={`text-[10px] font-bold uppercase tracking-[0.2em] opacity-30 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            © 2026 PicShift Global • Built for the Modern Web
+          </p>
+        </div>
       </footer>
     </div>
   );
